@@ -1,0 +1,36 @@
+# Ignore virtual environment
+venv/
+.env
+
+# Ignore compiled Python files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ignore logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Ignore macOS system files
+.DS_Store
+
+# Ignore VS Code settings
+.vscode/
+
+# Ignore Python dependency management files
+Pipfile
+Pipfile.lock
+poetry.lock
+
+# Ignore build artifacts
+build/
+dist/
+*.egg-info/
+
+# Ignore test cache
+.tox/
+.nox/
+.coverage
+htmlcov/

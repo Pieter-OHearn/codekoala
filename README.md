@@ -11,7 +11,6 @@ _🐨 From Gum Trees to Git Trees – Reviewing Your Commits with Care!_
 * 🔍 Git Integration – Automatically analyses git diff changes.
 * 🚀 Runs Locally – No external API calls required (privacy-first).
 * 🛠 Best Practice Checks – Detects code smells, anti-patterns, and design flaws.
-* 🔗 Future-Proof – Designed to support API-based LLMs in future versions.
 
 ## 🎯 How It Works
 1. Install & Run – CodeKoala scans your staged changes (git diff --cached).
