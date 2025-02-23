@@ -63,28 +63,8 @@ def get_local_llm_commit_message(changes: List[FileChange]) -> str:
     if not changes:
         return
     response: ChatResponse = chat(model=get_config_value("model"), messages=[
-        {
-            "role": "system",
-            "content": """
-                You are a git commit message generator that follows the Conventional Commits standard (https://www.conventionalcommits.org/).
-
-                Given the following git changes, generate a single commit message following this format:
-                <type>[optional scope]: <description>
-
-                [optional body]
-
-                [optional footer(s)]
-
-                Rules:
-                - Type must be one of: feat, fix, docs, style, refactor, perf, test, build, ci, chore
-                - Description should be in imperative mood, lowercase, no period
-                - Keep first line under 72 characters
-                - Provide only the commit message with no other text
-                - Break BREAKING CHANGE commits with an exclamation mark after the type/scope
-                - If multiple changes, focus on the primary change
-            """
-        },
-        {"role": "user", "content": f"{_prepare_llm_commit_message_prompt(changes)}"},
+        {"role": "system", "content": COMMIT_MESSAGE_SYSTEM_PROMPT},
+        {"role": "user", "content": f"{prepare_llm_commit_message_prompt(changes)}"},
     ])
     
     return response.message.content
@@ -103,9 +83,9 @@ def _prepare_llm_review_prompt(changes: List[FileChange]) -> str:
 
     return prompt
 
-def _prepare_llm_commit_message_prompt(changes: List[FileChange]) -> str:
+def prepare_llm_commit_message_prompt(changes: List[FileChange]) -> str:
     """Create prompt for LLM review."""
-    prompt = "Review these git changes and generate a commit message:"
+    prompt = "Generate a commit message for the following changes:"
     
     for change in changes:
         prompt += f"File: {change.path}\n"
@@ -122,3 +102,25 @@ def _get_changed_section(diff_content: str) -> str:
         if line.startswith('+') or line.startswith('-'):
             changed_lines.append(line)
     return "\n".join(changed_lines)
+
+COMMIT_MESSAGE_SYSTEM_PROMPT = """
+You are a git commit message generator that strictly follows the Conventional Commits 1.0.0 specification (https://www.conventionalcommits.org/).
+
+For the following git changes, generate a single commit message in the following format:
+
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+
+Please note the following rules:
+- The commit message should be **exactly** in the format outlined above.
+- Type must be one of: feat, fix, docs, style, refactor, perf, test, build, ci, chore.
+- Description should be in the imperative mood, lowercase, and **no period** at the end.
+- Keep the first line under **72 characters**.
+- Provide **only** the commit message, with **no additional explanation or text**.
+- For BREAKING CHANGE commits, append an exclamation mark (!) to the type/scope.
+- If there are multiple changes, focus on the primary change and generate a single commit message.
+- Do **not** include any git diff information or extra context other than what's given in the following changes.
+"""

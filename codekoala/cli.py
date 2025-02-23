@@ -2,11 +2,12 @@ import click
 from typing import Optional
 from rich.console import Console
 from git import Repo
+import pyperclip
 
 from codekoala.koala_messages import KOALA_COMMIT_LOADING_MESSAGES, KOALA_REVIEW_LOADING_MESSAGES
 from codekoala.verify_ollama import verify_ollama_setup
 from codekoala.git_integration import get_repo, get_diff
-from codekoala.review_engine import get_local_llm_code_suggestions, get_local_llm_commit_message
+from codekoala.review_engine import COMMIT_MESSAGE_SYSTEM_PROMPT, get_local_llm_code_suggestions, get_local_llm_commit_message, prepare_llm_commit_message_prompt
 from codekoala.formatter import format_output, execute_with_spinner
 from codekoala.config import set_config, load_config
 
@@ -57,7 +58,8 @@ def config(model: Optional[str], show: bool) -> None:
             click.echo(f"  {key}: {value}")
 
 @click.command()
-def generate_message():
+@click.option('--prompt-only', is_flag=True, help="Only generate the commit message prompt and copy it to your clipboard, ready to be pasted into an online LLM of your choosing.")
+def generate_message(prompt_only):
     """Generate an LLM-powered commit message."""
     console = Console()
     try:
@@ -68,8 +70,16 @@ def generate_message():
             console.print("[yellow]No changes detected[/yellow]")
             return
 
-        message = execute_with_spinner(get_local_llm_commit_message, KOALA_COMMIT_LOADING_MESSAGES, changes)
-        console.print(message)
+        if prompt_only:
+            prompt = COMMIT_MESSAGE_SYSTEM_PROMPT
+            prompt += prepare_llm_commit_message_prompt(changes)
+            pyperclip.copy(prompt)
+            console.print("[green]Commit message prompt copied to clipboard! Paste it into your preferred LLM interface.[/green]")
+            console.print() # print a blank line
+            console.print("[yellow]⚠️ Warning: Pasting this content into an online model may expose your code to third parties. Ensure you're comfortable sharing your code before proceeding.[/yellow]")
+        else:
+            message = execute_with_spinner(get_local_llm_commit_message, KOALA_COMMIT_LOADING_MESSAGES, changes)
+            console.print(message)
         
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
