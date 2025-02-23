@@ -58,6 +58,37 @@ def get_local_llm_code_suggestions(changes: List[FileChange]) -> str:
 
     return response.message.content
 
+def get_local_llm_commit_message(changes: List[FileChange]) -> str:
+    """Generates a commit message using a locally running LLM."""
+    if not changes:
+        return
+    response: ChatResponse = chat(model=get_config_value("model"), messages=[
+        {
+            "role": "system",
+            "content": """
+                You are a git commit message generator that follows the Conventional Commits standard (https://www.conventionalcommits.org/).
+
+                Given the following git changes, generate a single commit message following this format:
+                <type>[optional scope]: <description>
+
+                [optional body]
+
+                [optional footer(s)]
+
+                Rules:
+                - Type must be one of: feat, fix, docs, style, refactor, perf, test, build, ci, chore
+                - Description should be in imperative mood, lowercase, no period
+                - Keep first line under 72 characters
+                - Provide only the commit message with no other text
+                - Break BREAKING CHANGE commits with an exclamation mark after the type/scope
+                - If multiple changes, focus on the primary change
+            """
+        },
+        {"role": "user", "content": f"{prepare_llm_commit_message_prompt(changes)}"},
+    ])
+    
+    return response.message.content
+
 def prepare_llm_review_prompt(changes: List[FileChange]) -> str:
     """Create prompt for LLM review."""
     prompt = "Please analyse these changes and review them based on the criteria outlined above:\n\n"
@@ -70,4 +101,15 @@ def prepare_llm_review_prompt(changes: List[FileChange]) -> str:
             prompt += f"Previous Content:\n{change.old_content}\n"
         prompt += "-" * 50 + "\n"
 
+    return prompt
+
+def prepare_llm_commit_message_prompt(changes: List[FileChange]) -> str:
+    """Create prompt for LLM review."""
+    prompt = "Review these git changes and generate a commit message:"
+    
+    for change in changes:
+        prompt += f"File: {change.path}\n"
+        prompt += f"Change Type: {change.change_type}\n"
+        prompt += f"Diff:\n{change.content}\n"
+        prompt += "-" * 50 + "\n"
     return prompt

@@ -1,4 +1,9 @@
 # 🐨 CodeKoala
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)
+[![Koala Approved](https://img.shields.io/badge/Koala-Approved-%23a67c52)](https://github.com/POH8479/codekoala)
+
+
 Your Friendly, Local Code Reviewer (who prefers a nap!)
 
 ## 📌 Overview
@@ -11,11 +16,7 @@ _🐨 From Gum Trees to Git Trees – Reviewing Your Commits with Care!_
 * 🔍 Git Integration – Automatically ponders over your git diff changes. No need to lift a finger.
 * 🚀 Runs Locally – Your code stays close, no external calls needed (privacy first, naps second).
 * 🛠 Best Practice Checks – Catches code smells, anti-patterns, and design flaws (so you don't have to).
-
-## 🎯 How It Works
-1. Install & Run – CodeKoala scans your staged changes.
-2. AI-Powered Review – It lazily processes the code and suggests improvements—without making a fuss.
-3. Output Suggestions – See the feedback in your terminal—just like a koala pointing out the obvious.
+* 🗒️ Conventional Commits – Automatically generate commit messages that follow the [Conventional Commits](https://www.conventionalcommits.org/) spec.
 
 ## 🚀 Installation
 Ready to get started? Here’s how to bring CodeKoala into your project—without waking up the koala:
@@ -65,9 +66,19 @@ pip install click ollama GitPython rich
     codekoala review_code --branch main --staged
     ```
 
+- `generate-message`
+
+    Automatically generate a commit message following the [Conventional Commits](https://www.conventionalcommits.org/) specification based on your Git changes.
+
+    **Example:**
+    ```bash
+    codekoala generate-message
+    ```
+    This will analyse staged changes and suggest a structured commit message.
+
 - `config`
 
-    Configure codekoala settings, such as selecting the LLM model to use.
+    Configure CodeKoala settings, such as selecting the LLM model to use.
 
     **Example to set the model:**
     ```bash
@@ -75,7 +86,6 @@ pip install click ollama GitPython rich
     ```
 
     **Example to show current configuration:**
-
     ```bash
     codekoala config --show
     ```
@@ -91,12 +101,20 @@ pip install click ollama GitPython rich
     ```bash
     codekoala review_code
     ```
-2. **Review PRs or features compared to another branch**
-    You can use codekoala to review the differences between your current branch and another branch, such as develop, to ensure your code aligns with the main branch before merging:
+
+2. **Generate a commit message based on changes**
+    Instead of manually writing a commit message, let CodeKoala handle it:
+    ```bash
+    codekoala generate-message
+    ```
+    This ensures consistency and adherence to Conventional Commits.
+
+3. **Review PRs or features compared to another branch**
+    You can use CodeKoala to review the differences between your current branch and another branch, such as `develop`, to ensure your code aligns with the main branch before merging:
     ```bash
     codekoala review_code --branch develop
     ```
-    This command compares your current branch to develop and provides suggestions for any detected changes.
+    This command compares your current branch to `develop` and provides suggestions for any detected changes.
 
 
 _🐨 CodeKoala: Keeping Your Code Cuddly, Not Clunky!_
