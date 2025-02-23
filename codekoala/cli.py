@@ -29,13 +29,13 @@ def review_code(branch: Optional[str], staged: bool) -> None:
         click.echo("Not a valid Git repository.")
         return
 
-    diff = get_diff(repo, branch, staged)
+    changes = get_diff(repo, branch, staged)
 
-    if not diff:
+    if not changes:
         click.echo("No changes detected.")
         return
 
-    suggestions = execute_with_spinner(get_local_llm_code_suggestions, diff)
+    suggestions = execute_with_spinner(get_local_llm_code_suggestions, changes)
 
     format_output(suggestions)
 

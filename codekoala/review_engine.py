@@ -1,15 +1,12 @@
+from typing import List
 from ollama import chat, ChatResponse
 
 from codekoala.config import get_config_value
+from codekoala.git_integration import FileChange
 
-def analyze_code(diff):
-    """Analyzes the diff and generates review suggestions (simplified)."""
-    suggestions = []
-    return suggestions
-
-def get_local_llm_code_suggestions(code_diff: str) -> str:
+def get_local_llm_code_suggestions(changes: List[FileChange]) -> str:
     """Fetch code suggestions from the locally running CodeLlama model."""
-    if not code_diff:
+    if not changes:
         return
     response: ChatResponse = chat(model=get_config_value("model"), messages=[
         {
@@ -56,14 +53,21 @@ def get_local_llm_code_suggestions(code_diff: str) -> str:
                 - Rename `tempVar` to `userCount` for improved readability.
             """
         },
-        {
-            "role": "user",
-            "content": f"""
-                I have made changes to the following code. Could you please review it based on the criteria outlined above?
-
-                git diff output: {code_diff}
-            """
-        },
+        {"role": "user", "content": f"{prepare_llm_review_prompt(changes)}"},
     ])
 
     return response.message.content
+
+def prepare_llm_review_prompt(changes: List[FileChange]) -> str:
+    """Create prompt for LLM review."""
+    prompt = "Please analyse these changes and review them based on the criteria outlined above:\n\n"
+    
+    for change in changes:
+        prompt += f"File: {change.path}\n"
+        prompt += f"Change Type: {change.change_type}\n"
+        prompt += f"Diff:\n{change.content}\n"
+        if change.old_content:
+            prompt += f"Previous Content:\n{change.old_content}\n"
+        prompt += "-" * 50 + "\n"
+
+    return prompt
