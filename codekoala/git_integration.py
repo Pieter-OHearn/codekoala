@@ -35,7 +35,7 @@ def get_diff(repo: Repo, branch: Optional[str] = None, staged: bool = False) -> 
             diff_index.extend(staged_diff)
 
         for diff in diff_index:
-            change_type = get_change_type(diff)
+            change_type = _get_change_type(diff)
             content = diff.diff.decode('utf-8') if diff.diff else ""
             
             try:
@@ -60,7 +60,7 @@ def get_diff(repo: Repo, branch: Optional[str] = None, staged: bool = False) -> 
         
     return changes
 
-def get_change_type(diff) -> str:
+def _get_change_type(diff) -> str:
     if diff.new_file:
         return "added"
     elif diff.deleted_file:

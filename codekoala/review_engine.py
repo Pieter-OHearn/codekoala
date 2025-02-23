@@ -53,7 +53,7 @@ def get_local_llm_code_suggestions(changes: List[FileChange]) -> str:
                 - Rename `tempVar` to `userCount` for improved readability.
             """
         },
-        {"role": "user", "content": f"{prepare_llm_review_prompt(changes)}"},
+        {"role": "user", "content": f"{_prepare_llm_review_prompt(changes)}"},
     ])
 
     return response.message.content
@@ -84,12 +84,12 @@ def get_local_llm_commit_message(changes: List[FileChange]) -> str:
                 - If multiple changes, focus on the primary change
             """
         },
-        {"role": "user", "content": f"{prepare_llm_commit_message_prompt(changes)}"},
+        {"role": "user", "content": f"{_prepare_llm_commit_message_prompt(changes)}"},
     ])
     
     return response.message.content
 
-def prepare_llm_review_prompt(changes: List[FileChange]) -> str:
+def _prepare_llm_review_prompt(changes: List[FileChange]) -> str:
     """Create prompt for LLM review."""
     prompt = "Please analyse these changes and review them based on the criteria outlined above:\n\n"
     
@@ -103,13 +103,22 @@ def prepare_llm_review_prompt(changes: List[FileChange]) -> str:
 
     return prompt
 
-def prepare_llm_commit_message_prompt(changes: List[FileChange]) -> str:
+def _prepare_llm_commit_message_prompt(changes: List[FileChange]) -> str:
     """Create prompt for LLM review."""
     prompt = "Review these git changes and generate a commit message:"
     
     for change in changes:
         prompt += f"File: {change.path}\n"
         prompt += f"Change Type: {change.change_type}\n"
-        prompt += f"Diff:\n{change.content}\n"
+        prompt += f"Diff:\n{_get_changed_section(change.content)}\n"
         prompt += "-" * 50 + "\n"
     return prompt
+
+def _get_changed_section(diff_content: str) -> str:
+    """Extract only the changed lines from the diff content."""
+    lines = diff_content.splitlines()
+    changed_lines = []
+    for line in lines:
+        if line.startswith('+') or line.startswith('-'):
+            changed_lines.append(line)
+    return "\n".join(changed_lines)

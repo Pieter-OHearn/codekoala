@@ -4,7 +4,15 @@ from typing import Tuple
 
 from codekoala.config import get_config_value
 
-def check_ollama_availability() -> Tuple[bool, str]:
+def verify_ollama_setup() -> None:
+    """
+    Verify Ollama setup and raise informative errors if not properly configured.
+    """
+    is_available, message = check_ollama_availability()
+    if not is_available:
+        raise RuntimeError(f"Ollama setup incomplete: {message}")
+
+def _check_ollama_availability() -> Tuple[bool, str]:
     """
     Check if Ollama is installed and running.
     Returns (is_available, message)
@@ -16,11 +24,3 @@ def check_ollama_availability() -> Tuple[bool, str]:
         return False, "Ollama is installed but CodeLlama model is not installed. Install it with 'ollama pull codellama'"
     except FileNotFoundError:
         return False, "Ollama is not installed. Please install it from https://ollama.ai"
-
-def verify_ollama_setup() -> None:
-    """
-    Verify Ollama setup and raise informative errors if not properly configured.
-    """
-    is_available, message = check_ollama_availability()
-    if not is_available:
-        raise RuntimeError(f"Ollama setup incomplete: {message}")
