@@ -38,7 +38,7 @@ pip install click ollama GitPython rich
 - Install Ollama from [ollama.ai](https://ollama.com/)
 - After installation, pull the desired model:
     ```bash
-    ollama pull codellama # or your preferred model
+    ollama pull mistral-nemo:12b # recommended default model
     ```
 > **Note:** If you use a different model you must set it in the config
 
@@ -51,9 +51,9 @@ pip install click ollama GitPython rich
     ollama list
     ```
 
-- Configure your preferred model (default is codellama):
+- Configure your preferred model (default is mistral-nemo:12b):
     ```bash
-    codekoala config --model codellama
+    codekoala config --model mistral-nemo:12b
     ```
 
 ### Available Commands:
@@ -72,9 +72,15 @@ pip install click ollama GitPython rich
 
     **Example:**
     ```bash
-    codekoala generate-message
+    codekoala generate-message --ticket 54321 --context "Refines onboarding flow" --context-file docs/release-notes.md
     ```
-    This will analyse staged changes and suggest a structured commit message.
+    This analyses staged changes, blends in any optional context, and suggests a structured commit message. Use `--prompt-only` to copy the prompt instead of calling the local model directly.
+
+    **Helpful flags**
+    - `--ticket`: Provide a ticket number upfront (e.g. `--ticket 54321`).
+    - `--context`: Add free-form context; repeat for multiple notes.
+    - `--context-file`: Merge the contents of supporting files into the prompt.
+    - `--prompt-only`: Copy the full prompt (diff + context) to your clipboard.
 
 - `config`
 
@@ -82,7 +88,7 @@ pip install click ollama GitPython rich
 
     **Example to set the model:**
     ```bash
-    codekoala config --model codellama
+    codekoala config --model mistral-nemo:12b
     ```
 
     **Example to show current configuration:**
@@ -105,7 +111,7 @@ pip install click ollama GitPython rich
 2. **Generate a commit message based on changes**
     Instead of manually writing a commit message, let CodeKoala handle it:
     ```bash
-    codekoala generate-message
+    codekoala generate-message --ticket 54321
     ```
     This ensures consistency and adherence to Conventional Commits.
 

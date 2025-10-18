@@ -5,7 +5,7 @@ from typing import Dict, Any
 CONFIG_FILE = Path.home() / ".config" / "codekoala" / "config.json"
 
 DEFAULT_CONFIG = {
-    "model": "codellama",
+    "model": "mistral-nemo:12b",
     # TODO: Allow future support for API-based LLMs
     "provider": "ollama",
     "api_key": None,

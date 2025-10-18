@@ -1,4 +1,6 @@
-from typing import List
+import json
+import re
+from typing import Any, Dict, List, Optional
 from ollama import chat, ChatResponse
 
 from codekoala.config import get_config_value
@@ -58,16 +60,29 @@ def get_local_llm_code_suggestions(changes: List[FileChange]) -> str:
 
     return response.message.content
 
-def get_local_llm_commit_message(changes: List[FileChange]) -> str:
+def get_local_llm_commit_message(
+    changes: List[FileChange],
+    user_context: Optional[str] = None,
+    user_ticket: Optional[str] = None,
+) -> str:
     """Generates a commit message using a locally running LLM."""
     if not changes:
-        return
+        return ""
+
+    user_prompt = prepare_llm_commit_message_prompt(
+        changes,
+        user_context=user_context,
+        user_ticket=user_ticket,
+    )
     response: ChatResponse = chat(model=get_config_value("model"), messages=[
         {"role": "system", "content": COMMIT_MESSAGE_SYSTEM_PROMPT},
-        {"role": "user", "content": f"{prepare_llm_commit_message_prompt(changes)}"},
+        {"role": "user", "content": f"{user_prompt}"},
     ])
-    
-    return response.message.content
+
+    return _format_llm_commit_message_response(
+        response.message.content,
+        user_ticket=user_ticket,
+    )
 
 def _prepare_llm_review_prompt(changes: List[FileChange]) -> str:
     """Create prompt for LLM review."""
@@ -83,16 +98,33 @@ def _prepare_llm_review_prompt(changes: List[FileChange]) -> str:
 
     return prompt
 
-def prepare_llm_commit_message_prompt(changes: List[FileChange]) -> str:
-    """Create prompt for LLM review."""
-    prompt = "Generate a commit message for the following changes:"
-    
+def prepare_llm_commit_message_prompt(
+    changes: List[FileChange],
+    user_context: Optional[str] = None,
+    user_ticket: Optional[str] = None,
+) -> str:
+    """Create prompt for LLM commit message generation."""
+    prompt_sections = ["Generate a commit message for the following changes."]
+
+    if user_context:
+        prompt_sections.append("Additional project context provided by the user:")
+        prompt_sections.append(user_context)
+        prompt_sections.append("-" * 50)
+
+    normalized_ticket = _normalize_ticket(user_ticket)
+    if normalized_ticket:
+        prompt_sections.append("Ticket number provided by the user (must be used exactly):")
+        prompt_sections.append(normalized_ticket)
+        prompt_sections.append("-" * 50)
+
     for change in changes:
-        prompt += f"File: {change.path}\n"
-        prompt += f"Change Type: {change.change_type}\n"
-        prompt += f"Diff:\n{_get_changed_section(change.content)}\n"
-        prompt += "-" * 50 + "\n"
-    return prompt
+        prompt_sections.append(f"File: {change.path}")
+        prompt_sections.append(f"Change Type: {change.change_type}")
+        prompt_sections.append("Diff:")
+        prompt_sections.append(_get_changed_section(change.content))
+        prompt_sections.append("-" * 50)
+
+    return "\n".join(prompt_sections)
 
 def _get_changed_section(diff_content: str) -> str:
     """Extract only the changed lines from the diff content."""
@@ -104,23 +136,116 @@ def _get_changed_section(diff_content: str) -> str:
     return "\n".join(changed_lines)
 
 COMMIT_MESSAGE_SYSTEM_PROMPT = """
-You are a git commit message generator that strictly follows the Conventional Commits 1.0.0 specification (https://www.conventionalcommits.org/).
+You are an assistant that writes git commit messages for a development team. The team uses the following strict templates:
 
-For the following git changes, generate a single commit message in the following format:
+- {type}(#ticket): {imperative description}
+- {type}: {imperative description} (when no ticket applies)
 
-<type>[optional scope]: <description>
+Optional bullet points for rationale follow, each prefixed with "- ".
 
-[optional body]
+Rules you must follow:
+- Allowed type values: chore, feature, bugfix, hotfix.
+- Use the ticket supplied in the prompt when one is provided.
+- If no ticket is provided or applicable, omit the ticket entirely.
+- The description must be short, in the imperative mood, and must not end with a period.
+- Return context-aware bullets only when they add meaningful rationale or implementation details.
+- Keep bullet text concise; each bullet should be a single sentence fragment.
 
-[optional footer(s)]
+Respond ONLY with a single JSON object (no code fences, no additional text) that matches this schema:
 
-Please note the following rules:
-- The commit message should be **exactly** in the format outlined above.
-- Type must be one of: feat, fix, docs, style, refactor, perf, test, build, ci, chore.
-- Description should be in the imperative mood, lowercase, and **no period** at the end.
-- Keep the first line under **72 characters**.
-- Provide **only** the commit message, with **no additional explanation or text**.
-- For BREAKING CHANGE commits, append an exclamation mark (!) to the type/scope.
-- If there are multiple changes, focus on the primary change and generate a single commit message.
-- Do **not** include any git diff information or extra context other than what's given in the following changes.
+{
+  "type": "chore|feature|bugfix|hotfix",
+  "ticket": "#12345 or null",
+  "description": "imperative summary without trailing period",
+  "extras": ["optional bullet point", "..."]
+}
+
+If you have no bullets, respond with `"extras": []`.
 """
+
+ALLOWED_COMMIT_TYPES = {"chore", "feature", "bugfix", "hotfix"}
+
+_JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
+
+
+def _format_llm_commit_message_response(raw_response: str, user_ticket: Optional[str] = None) -> str:
+    payload = _parse_commit_message_payload(raw_response)
+    commit_type = str(payload.get("type", "")).lower().strip()
+    ticket = payload.get("ticket", "")
+    description = str(payload.get("description", "")).strip()
+    extras = payload.get("extras", [])
+
+    if commit_type not in ALLOWED_COMMIT_TYPES:
+        commit_type = "chore"
+
+    if user_ticket:
+        normalized_ticket = _normalize_ticket(user_ticket)
+    else:
+        normalized_ticket = ""
+
+    if not description:
+        description = "update code"
+
+    if normalized_ticket:
+        formatted_lines = [f"{commit_type}({normalized_ticket}): {description}"]
+    else:
+        formatted_lines = [f"{commit_type}: {description}"]
+
+    normalized_extras = []
+    if isinstance(extras, list):
+        normalized_extras = [
+            cleaned for cleaned in (_normalize_bullet(str(item)) for item in extras)
+            if cleaned
+        ]
+    elif extras:
+        cleaned = _normalize_bullet(str(extras))
+        if cleaned:
+            normalized_extras = [cleaned]
+
+    if normalized_extras:
+        formatted_lines.append("")
+        formatted_lines.extend(f"- {item}" for item in normalized_extras)
+
+    return "\n".join(formatted_lines)
+
+
+def _parse_commit_message_payload(raw_response: str) -> Dict[str, Any]:
+    candidates = []
+    content = raw_response.strip()
+
+    for match in _JSON_BLOCK_PATTERN.finditer(content):
+        candidates.append(match.group(1).strip())
+
+    if content:
+        candidates.append(content)
+
+    for candidate in candidates:
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+
+    return {
+        "type": "chore",
+        "ticket": None,
+        "description": "update code",
+        "extras": ["Failed to parse commit message response.", content],
+    }
+
+
+def _normalize_ticket(ticket: Optional[Any]) -> str:
+    if ticket is None:
+        return ""
+    ticket_str = str(ticket).strip()
+    if not ticket_str:
+        return ""
+    if not ticket_str.startswith("#"):
+        ticket_str = f"#{ticket_str}"
+    return ticket_str
+
+
+def _normalize_bullet(item: str) -> str:
+    cleaned = re.sub(r"^\s*[-•*]+\s*", "", item).strip()
+    return cleaned

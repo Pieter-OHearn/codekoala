@@ -44,7 +44,7 @@ def review_code(branch: Optional[str], staged: bool) -> None:
     format_output(suggestions)
 
 @click.command()
-@click.option("--model", type=str, help="Set the model to use (e.g., 'codellama')")
+@click.option("--model", type=str, help="Set the model to use (e.g., 'mistral-nemo:12b')")
 @click.option("--show", is_flag=True, help="Show current configuration")
 def config(model: Optional[str], show: bool) -> None:
     """Configure CodeKoala settings."""
@@ -59,7 +59,10 @@ def config(model: Optional[str], show: bool) -> None:
 
 @click.command()
 @click.option('--prompt-only', is_flag=True, help="Only generate the commit message prompt and copy it to your clipboard, ready to be pasted into an online LLM of your choosing.")
-def generate_message(prompt_only):
+@click.option('--context', type=str, multiple=True, help="Additional context to provide to the AI. You can pass this option multiple times.")
+@click.option('--context-file', type=click.Path(exists=True, dir_okay=False, readable=True, path_type=str), multiple=True, help="Path to a file whose contents should be provided to the AI as additional context.")
+@click.option('--ticket', type=str, help="Manually specify the ticket number to enforce in the generated commit message.")
+def generate_message(prompt_only, context, context_file, ticket):
     """Generate an LLM-powered commit message."""
     console = Console()
     try:
@@ -70,15 +73,27 @@ def generate_message(prompt_only):
             console.print("[yellow]No changes detected[/yellow]")
             return
 
+        user_context_parts = []
+
+        if context:
+            user_context_parts.append("\n".join(context).strip())
+
+        for file_path in context_file:
+            with open(file_path, "r", encoding="utf-8") as file_handle:
+                user_context_parts.append(file_handle.read().strip())
+
+        user_context = "\n\n".join(part for part in user_context_parts if part).strip() or None
+        user_ticket = ticket.strip() if ticket else None
+
         if prompt_only:
             prompt = COMMIT_MESSAGE_SYSTEM_PROMPT
-            prompt += prepare_llm_commit_message_prompt(changes)
+            prompt += prepare_llm_commit_message_prompt(changes, user_context=user_context, user_ticket=user_ticket)
             pyperclip.copy(prompt)
             console.print("[green]Commit message prompt copied to clipboard! Paste it into your preferred LLM interface.[/green]")
             console.print() # print a blank line
             console.print("[yellow]⚠️ Warning: Pasting this content into an online model may expose your code to third parties. Ensure you're comfortable sharing your code before proceeding.[/yellow]")
         else:
-            message = execute_with_spinner(get_local_llm_commit_message, KOALA_COMMIT_LOADING_MESSAGES, changes)
+            message = execute_with_spinner(get_local_llm_commit_message, KOALA_COMMIT_LOADING_MESSAGES, changes, user_context=user_context, user_ticket=user_ticket)
             console.print(message)
         
     except Exception as e:
