@@ -11,6 +11,7 @@ DEFAULT_CONFIG = {
     "api_key": None,
 }
 
+
 def load_config() -> Dict[str, Any]:
     """Load configuration from file, falling back to defaults."""
     if CONFIG_FILE.exists():
@@ -21,17 +22,20 @@ def load_config() -> Dict[str, Any]:
             pass
     return DEFAULT_CONFIG.copy()
 
+
 def save_config(config: Dict[str, Any]) -> None:
     """Save configuration to file."""
     CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
 
+
 def set_config(key: str, value: Any) -> None:
     """Update a configuration key and save it."""
     config = load_config()
     config[key] = value
     save_config(config)
+
 
 def get_config_value(key: str) -> Any:
     """Retrieve a configuration value."""

@@ -1,17 +1,24 @@
 from dataclasses import dataclass
-from git import Repo, exc
 import os
-from typing import List, Optional
+from typing import Iterable, List, Optional
+
+from git import Repo, exc
+
+
+class GitIntegrationError(RuntimeError):
+    """Raised when git diff operations fail."""
+
 
 def get_repo(path: Optional[str] = None) -> Optional[Repo]:
-    """Returns a Git repository object for the given path, defaults to the current directory."""
+    """Return a Git repository object for the given path, defaults to the current directory."""
     if not path:
         path = os.getcwd()
     try:
         return Repo(path, search_parent_directories=True)
     except exc.InvalidGitRepositoryError:
-        print('InvalidGitRepositoryError')
+        print("InvalidGitRepositoryError")
         return None
+
 
 @dataclass
 class FileChange:
@@ -20,51 +27,73 @@ class FileChange:
     content: str
     old_content: str = ""
 
+
 def get_diff(repo: Repo, branch: Optional[str] = None, staged: bool = False) -> List[FileChange]:
-    """Returns the diff of the repo, comparing with a branch or staging area."""
-    changes = []
-    
+    """Return the diff of the repo, comparing with a branch or staging area."""
+    changes: List[FileChange] = []
+
     try:
         if branch:
-            diff_index = repo.head.commit.diff(repo.heads[branch], create_patch=True)
+            target_commit = repo.commit(branch)
+            head_commit = repo.head.commit if repo.head.is_valid() else None
+            if head_commit:
+                diff_index = head_commit.diff(target_commit, create_patch=True)
+            else:
+                diff_index = target_commit.diff(None, create_patch=True)
         elif staged:
-            diff_index = repo.index.diff(repo.head.commit, create_patch=True, R=True)
+            if repo.head.is_valid():
+                diff_index = repo.index.diff("HEAD", create_patch=True)
+            else:
+                diff_index = repo.index.diff(None, create_patch=True)
         else:
-            diff_index = repo.index.diff(None, create_patch=True)
-            staged_diff = repo.head.commit.diff(repo.index, create_patch=True)
-            diff_index.extend(staged_diff)
+            diff_index = list(repo.index.diff(None, create_patch=True))
+            if repo.head.is_valid():
+                staged_diff = repo.index.diff("HEAD", create_patch=True)
+                diff_index.extend(staged_diff)
 
-        for diff in diff_index:
+        for diff in _iter_diffs(diff_index):
             change_type = _get_change_type(diff)
-            content = diff.diff.decode('utf-8') if diff.diff else ""
-            
+            content = diff.diff.decode("utf-8") if diff.diff else ""
+
             try:
                 if diff.new_file:
                     old_content = ""
                 elif branch:
-                    old_content = repo.git.show(f'{branch}:{diff.a_path}') if diff.a_path else ""
+                    old_content = repo.git.show(f"{branch}:{diff.a_path}") if diff.a_path else ""
                 else:
-                    old_content = repo.git.show(f'HEAD:{diff.a_path}') if diff.a_path else ""
-            except Exception as e:
+                    old_content = repo.git.show(f"HEAD:{diff.a_path}") if diff.a_path else ""
+            except Exception:
                 old_content = ""
-                
-            changes.append(FileChange(
-                path=diff.b_path or diff.a_path,
-                change_type=change_type,
-                content=content,
-                old_content=old_content
-            ))
-            
-    except Exception as e:
-        raise GitError(f"Failed to get diff: {str(e)}")
-        
+
+            changes.append(
+                FileChange(
+                    path=diff.b_path or diff.a_path,
+                    change_type=change_type,
+                    content=content,
+                    old_content=old_content,
+                )
+            )
+
+    except exc.GitCommandError as error:
+        stderr = getattr(error, "stderr", "") or getattr(error, "stdout", "") or str(error)
+        raise GitIntegrationError(f"Failed to get diff: {stderr.strip()}") from error
+    except Exception as error:
+        raise GitIntegrationError(f"Failed to get diff: {str(error)}") from error
+
     return changes
+
+
+def _iter_diffs(diff_index: Iterable) -> List:
+    if isinstance(diff_index, list):
+        return diff_index
+    return list(diff_index)
+
 
 def _get_change_type(diff) -> str:
     if diff.new_file:
         return "added"
-    elif diff.deleted_file:
+    if diff.deleted_file:
         return "deleted"
-    elif diff.renamed:
+    if diff.renamed:
         return "renamed"
     return "modified"

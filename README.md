@@ -1,7 +1,7 @@
 # 🐨 CodeKoala
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://conventionalcommits.org)
-[![Koala Approved](https://img.shields.io/badge/Koala-Approved-%23a67c52)](https://github.com/POH8479/codekoala)
+[![Koala Approved](https://img.shields.io/badge/Koala-Approved-%23a67c52)](https://github.com/pieter-ohearn/codekoala)
 
 
 Your Friendly, Local Code Reviewer (who prefers a nap!)
@@ -19,28 +19,23 @@ _🐨 From Gum Trees to Git Trees – Reviewing Your Commits with Care!_
 * 🗒️ Conventional Commits – Automatically generate commit messages that follow the [Conventional Commits](https://www.conventionalcommits.org/) spec.
 
 ## 🚀 Installation
-Ready to get started? Here’s how to bring CodeKoala into your project—without waking up the koala:
+Pick the option that fits your workflow—each installs the `codekoala` CLI so you can call it from any repository.
 
-### 1. Install the package
+### Install from a GitHub Release (recommended)
+1. Download the latest `codekoala-*.whl` from the [Releases](https://github.com/pieter-ohearn/codekoala/releases) page.
+2. Install it with pip:
+   ```bash
+   pip install path/to/codekoala-<version>-py3-none-any.whl
+   ```
 
-You can install `codekoala` locally using pip in editable mode:
-
-```bash
-pip install -e .
-```
-### 2. Install dependencies
-Ensure all necessary dependencies are installed:
-```bash
-pip install click ollama GitPython rich
-```
-
-### 3. Ollama Installation Required
-- Install Ollama from [ollama.ai](https://ollama.com/)
-- After installation, pull the desired model:
-    ```bash
-    ollama pull mistral-nemo:12b # recommended default model
-    ```
-> **Note:** If you use a different model you must set it in the config
+### Requirements
+- Python 3.10 or newer
+- [Ollama](https://ollama.com/) installed locally
+- Pull the recommended model:  
+  ```bash
+  ollama pull mistral-nemo:12b
+  ```
+  If you prefer a different model, set it after install with `codekoala config --model <name>`.
 
 ## 🛠 Usage
 
@@ -124,3 +119,17 @@ pip install click ollama GitPython rich
 
 
 _🐨 CodeKoala: Keeping Your Code Cuddly, Not Clunky!_
+
+## 🔁 Release Workflow
+Releases are automated through GitHub Actions whenever you push a tag that matches `v*.*.*`.
+
+1. Make sure the version in `pyproject.toml` is up to date.
+2. Create a tag and push it, e.g.:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+3. The `release` workflow will:
+   - lint the codebase with Flake8,
+   - build and upload wheel/sdist artifacts,
+   - create a GitHub Release (shows up in the repository sidebar automatically).

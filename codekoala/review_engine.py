@@ -6,59 +6,52 @@ from ollama import chat, ChatResponse
 from codekoala.config import get_config_value
 from codekoala.git_integration import FileChange
 
+MAX_REVIEW_PROMPT_CHARS = 24000
+MAX_REVIEW_DIFF_SECTION_CHARS = 8000
+MAX_REVIEW_OLD_CONTENT_CHARS = 4000
+MAX_COMMIT_PROMPT_CHARS = 12000
+MAX_COMMIT_DIFF_SECTION_CHARS = 4000
+MAX_USER_CONTEXT_CHARS = 2000
+TRUNCATION_NOTICE_TEMPLATE = (
+    "\n\n[Truncated {omitted} characters from {label} to stay within limits.]"
+)
+
+
 def get_local_llm_code_suggestions(changes: List[FileChange]) -> str:
     """Fetch code suggestions from the locally running CodeLlama model."""
     if not changes:
         return
-    response: ChatResponse = chat(model=get_config_value("model"), messages=[
-        {
-            "role": "system",
-            "content": """
-                You are a code review assistant. Below is a Git diff of some code changes. Review the code and provide structured feedback, ensuring your response adheres to the following format **exactly**:
-
-                **Evaluation Criteria:**
-                    - Best programming practices
-                    - SOLID principles
-                    - Design patterns
-                    - Code readability and maintainability
-                    - Efficiency and performance improvements
-                    - Identifying and avoiding common code smells
-
-                **Output Format (strictly follow this structure):**
-
-                [bold yellow]Issues/Bugs:[/bold yellow]
-                - <Issue 1 description>
-                - <Issue 2 description>
-
-                [bold cyan]Recommended Refactors:[/bold cyan]
-                - <Refactor 1 description>
-                - <Refactor 2 description>
-
-                [bold green]Non-Essential Enhancements:[/bold green]
-                - <Enhancement 1 description>
-                - <Enhancement 2 description>
-
-                **Important:**
-                - If no issues are found, explicitly state: `[bold green]No issues found in this diff.[/bold green]`
-                - Ensure the response includes all three sections, even if empty (e.g., "No recommended refactors for this diff").
-                - Keep responses **concise yet informative**. Provide clear reasoning when suggesting improvements.
-
-                **Example Response:**
-                
-                [bold yellow]Issues/Bugs:[/bold yellow]
-                - Null reference exception risk in `UserService.getUserById` when `user` is None.
-
-                [bold cyan]Recommended Refactors:[/bold cyan]
-                - Extract the database query logic into a separate repository class for better separation of concerns.
-
-                [bold green]Non-Essential Enhancements:[/bold green]
-                - Rename `tempVar` to `userCount` for improved readability.
-            """
-        },
-        {"role": "user", "content": f"{_prepare_llm_review_prompt(changes)}"},
-    ])
+    response: ChatResponse = chat(
+        model=get_config_value("model"),
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a code review assistant. You will receive Git diffs. "
+                    "Review the changes and provide structured feedback in the exact format below.\n\n"
+                    "**Evaluation Criteria:**\n"
+                    "- Best programming practices\n"
+                    "- SOLID principles\n"
+                    "- Design patterns\n"
+                    "- Code readability and maintainability\n"
+                    "- Efficiency and performance improvements\n"
+                    "- Identifying and avoiding common code smells\n\n"
+                    "[bold yellow]Issues/Bugs:[/bold yellow]\n"
+                    "- <Issue description>\n"
+                    "[bold cyan]Recommended Refactors:[/bold cyan]\n"
+                    "- <Refactor description>\n"
+                    "[bold green]Non-Essential Enhancements:[/bold green]\n"
+                    "- <Enhancement description>\n\n"
+                    "If no issues exist, state `[bold green]No issues found in this diff.[/bold green]`. "
+                    "Always include the three sections even when empty."
+                ),
+            },
+            {"role": "user", "content": f"{_prepare_llm_review_prompt(changes)}"},
+        ],
+    )
 
     return response.message.content
+
 
 def get_local_llm_commit_message(
     changes: List[FileChange],
@@ -84,19 +77,31 @@ def get_local_llm_commit_message(
         user_ticket=user_ticket,
     )
 
+
 def _prepare_llm_review_prompt(changes: List[FileChange]) -> str:
     """Create prompt for LLM review."""
     prompt = "Please analyse these changes and review them based on the criteria outlined above:\n\n"
-    
+
     for change in changes:
         prompt += f"File: {change.path}\n"
         prompt += f"Change Type: {change.change_type}\n"
-        prompt += f"Diff:\n{change.content}\n"
+        diff_content = _truncate_section(
+            change.content,
+            MAX_REVIEW_DIFF_SECTION_CHARS,
+            f"diff for {change.path}"
+        )
+        prompt += f"Diff:\n{diff_content}\n"
         if change.old_content:
-            prompt += f"Previous Content:\n{change.old_content}\n"
+            previous_content = _truncate_section(
+                change.old_content,
+                MAX_REVIEW_OLD_CONTENT_CHARS,
+                f"previous content for {change.path}"
+            )
+            prompt += f"Previous Content:\n{previous_content}\n"
         prompt += "-" * 50 + "\n"
 
-    return prompt
+    return _truncate_section(prompt, MAX_REVIEW_PROMPT_CHARS, "review prompt")
+
 
 def prepare_llm_commit_message_prompt(
     changes: List[FileChange],
@@ -108,7 +113,7 @@ def prepare_llm_commit_message_prompt(
 
     if user_context:
         prompt_sections.append("Additional project context provided by the user:")
-        prompt_sections.append(user_context)
+        prompt_sections.append(_truncate_section(user_context, MAX_USER_CONTEXT_CHARS, "user context"))
         prompt_sections.append("-" * 50)
 
     normalized_ticket = _normalize_ticket(user_ticket)
@@ -121,10 +126,17 @@ def prepare_llm_commit_message_prompt(
         prompt_sections.append(f"File: {change.path}")
         prompt_sections.append(f"Change Type: {change.change_type}")
         prompt_sections.append("Diff:")
-        prompt_sections.append(_get_changed_section(change.content))
+        diff_excerpt = _truncate_section(
+            _get_changed_section(change.content),
+            MAX_COMMIT_DIFF_SECTION_CHARS,
+            f"diff for {change.path}"
+        )
+        prompt_sections.append(diff_excerpt)
         prompt_sections.append("-" * 50)
 
-    return "\n".join(prompt_sections)
+    prompt = "\n".join(prompt_sections)
+    return _truncate_section(prompt, MAX_COMMIT_PROMPT_CHARS, "commit message prompt")
+
 
 def _get_changed_section(diff_content: str) -> str:
     """Extract only the changed lines from the diff content."""
@@ -135,8 +147,10 @@ def _get_changed_section(diff_content: str) -> str:
             changed_lines.append(line)
     return "\n".join(changed_lines)
 
+
 COMMIT_MESSAGE_SYSTEM_PROMPT = """
-You are an assistant that writes git commit messages for a development team. The team uses the following strict templates:
+You are an assistant that writes git commit messages for a development team.
+Use one of the following strict templates:
 
 - {type}(#ticket): {imperative description}
 - {type}: {imperative description} (when no ticket applies)
@@ -171,7 +185,6 @@ _JSON_BLOCK_PATTERN = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 def _format_llm_commit_message_response(raw_response: str, user_ticket: Optional[str] = None) -> str:
     payload = _parse_commit_message_payload(raw_response)
     commit_type = str(payload.get("type", "")).lower().strip()
-    ticket = payload.get("ticket", "")
     description = str(payload.get("description", "")).strip()
     extras = payload.get("extras", [])
 
@@ -249,3 +262,20 @@ def _normalize_ticket(ticket: Optional[Any]) -> str:
 def _normalize_bullet(item: str) -> str:
     cleaned = re.sub(r"^\s*[-•*]+\s*", "", item).strip()
     return cleaned
+
+
+def _truncate_section(text: str, max_chars: int, label: str) -> str:
+    if not text:
+        return text
+    if len(text) <= max_chars:
+        return text
+
+    truncated = text[:max_chars]
+    # Avoid cutting mid-line when possible.
+    last_newline = truncated.rfind("\n")
+    if last_newline >= int(max_chars * 0.5):
+        truncated = truncated[:last_newline]
+
+    omitted = len(text) - len(truncated)
+    notice = TRUNCATION_NOTICE_TEMPLATE.format(omitted=omitted, label=label)
+    return f"{truncated}{notice}"
